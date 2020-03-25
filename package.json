@@ -1,0 +1,11 @@
+{
+  "name": "server",
+  "main": "client_test.js",
+  "dependencies": {
+    "ws": "^7.2.3"
+  },
+  "optionalDependencies": {
+    "bufferutil": "^4.0.1",
+    "utf-8-validate": "^5.0.2"
+  }
+}

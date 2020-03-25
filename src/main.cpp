@@ -1,5 +1,8 @@
 #include "App.h"
 #include "json.h"
+#include "alias.h"
+#include "logger.h"
+#include "events.h"
 
 bool with_gui = WITH_GUI ? true : false;
 #ifdef WITH_GUI
@@ -8,13 +11,95 @@ bool with_gui = WITH_GUI ? true : false;
     #include "widgets/image.h"
 #endif
 
-
+using namespace dw;
+using namespace nlohmann;
 
 struct PerSocketData {
-
+    uint64_t session_id = 0;
 };
 
-void gui_setup(bool threaded = true){
+// Signals
+dw::Signal<str> SIGNAL_log;
+
+
+
+void start_sock_server(){
+    // Websocket server
+    using namespace uWS;
+    App app;
+
+    // Settings
+    App::WebSocketBehavior b;
+    b.compression = uWS::DISABLED;
+
+    /* Here you can use req just like as for Http */
+    b.open = [](auto *ws, auto *req) {
+
+        // Set data to user
+        auto u_data_ptr = ws->getUserData();
+        PerSocketData* user_data = (PerSocketData*) u_data_ptr;
+
+        ws->send("Connected", OpCode::TEXT);
+        int x=0;
+    };
+
+    // Handle commands
+    b.message = [&](auto *ws, std::string_view message, OpCode opCode) {
+        auto u_data_ptr = ws->getUserData();
+        PerSocketData* user_data = (PerSocketData*) u_data_ptr;
+
+        auto j = json::parse(message);
+
+        // Check command
+        if(j.contains("command")){
+            auto command = j.at("command").get<str>();
+
+            // unfinished
+            if(command == "subscribe"){
+                if(j.contains("channel")){
+                    auto channel = j.at("channel").get<str>();
+                    ws->subscribe(channel);
+                } else {
+                    logger.warning("Websocket channel name not found: {}, skipping...");
+                }
+            }
+
+            // Call event here with data
+            if(command == "event"){
+                auto data = j.at("data");
+
+                auto msg = data.dump();
+                logger.info(msg);
+
+            }
+            ws->send(message, opCode);
+        }
+    };
+    b.close = [](auto *ws, int code, std::string_view message) {
+        ws->send("Disconnected from server", OpCode::TEXT);
+    };
+
+    // Create websocket
+    app.ws<PerSocketData>("/*", std::move(b));
+
+    // Run event loop
+    app.listen(9001, [](auto *listenSocket) {
+        if (listenSocket) {
+            logger.info("Websockets listening for connections...");
+        }
+    }).run();
+
+    logger.crash("Websockets fell through...");
+};
+
+
+
+
+int main(){
+    // Logger
+    logger.signal_p = &SIGNAL_log;
+    logger.file_path = "/home/maris/Downloads/log.txt";
+
     LogWidget log_w;
     ImageWidget img_w;
     img_w.img = cv::imread("/home/maris/Downloads/asd.jpeg");
@@ -23,65 +108,30 @@ void gui_setup(bool threaded = true){
    // Pass drawing functions to gui
     std::vector<std::function<void()>> drawing_procs = {
        [&]() { log_w.draw(); },
-       [&]() { img_w.draw(); }
+//       [&]() { img_w.draw(); }
     };
 
-    // seperate thread for GUI
-    if(threaded)
-        std::thread gui_thread([&](){ start_gui(drawing_procs); });
-    else
-        start_gui(drawing_procs);
-}
+
+    std::thread gui_thread([&](){ start_gui(drawing_procs); });
 
 
-int main(){
-    // GUI
-    if(with_gui)
-        gui_setup();
+    dw::EventListener el;
+    std::thread el_thread([&](){ el.eventLoop(); });
 
-    // Websocket server
-	auto app = uWS::App();
 
-    app.ws<PerSocketData>("/*", {
-        /* Settings */
-        .compression = uWS::SHARED_COMPRESSOR,
-        .maxPayloadLength = 16 * 1024 * 1024,
-        .idleTimeout = 10,
-        .maxBackpressure = 1 * 1024 * 1204,
 
-        /* Handlers */
-        .open = [](auto *ws, auto *req) {
-            /* Here you can use req just like as for Http */
-            ws->send("Connected", uWS::OpCode::TEXT);
-            int x=0;
-        },
-
-        // Client sends message
-        .message = [](auto *ws, std::string_view message, uWS::OpCode opCode) {
-            auto x = ws->getUserData();
-            ws->send(message, opCode);
-        },
-
-        .drain = [](auto *ws) {
-            /* Check getBufferedAmount here */
-        },
-        .ping = [](auto *ws) {
-
-        },
-        .pong = [](auto *ws) {
-
-        },
-        .close = [](auto *ws, int code, std::string_view message) {
-            ws->send("Disconnected from server", uWS::OpCode::TEXT);
-        }
+    // seperate thread for websocket server
+    std::thread ws_thread([&](){
+        start_sock_server();
     });
-    
-    app.listen(9001, [](auto *listenSocket) {
-        if (listenSocket) {
-            std::cout << "Listening for connections..." << std::endl;
-        }
-    }).run();
 
-    std::cout << "Shoot! We failed to listen and the App fell through, exiting now!" << std::endl;
 
-}
+    // Plants
+
+    connect(SIGNAL_log, &log_w, &LogWidget::SLOT_log, &el);
+
+
+
+    while(true){};
+
+};

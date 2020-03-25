@@ -3,7 +3,7 @@
 
 #include "imgui/imgui.h"
 #include <mutex>
-#include "alias.h"
+#include <string.h>
 
 struct LogWidget
 {
@@ -20,7 +20,7 @@ struct LogWidget
     lineOffsets.clear();
   }
 
-  void SLOT_log(str msg){   
+  void SLOT_log(std::string msg){
     msg += "\n";
     buf.appendf("%s", msg.c_str());
     scrollToBottom = true;
@@ -37,7 +37,6 @@ struct LogWidget
     }
   }
 
-  //todo is lock needed here?
   void draw(){
     ImGui::SetNextWindowPos({ 0,0 });
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
@@ -54,8 +53,6 @@ struct LogWidget
     ImGui::BeginChild("scrolling");
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0,1));
     if(copy) ImGui::LogToClipboard();
-
-    // mtx.lock();
 
     if(filter.IsActive()){
       const char* buf_begin = buf.begin();
@@ -76,8 +73,6 @@ struct LogWidget
     if(scrollToBottom)
       ImGui::SetScrollHere(1.0f);
     scrollToBottom = false;
-
-    // mtx.unlock();
 
     ImGui::PopStyleVar();
     ImGui::EndChild();
