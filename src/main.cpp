@@ -40,7 +40,7 @@ void start_sock_server(){
         PerSocketData* user_data = (PerSocketData*) u_data_ptr;
 
         ws->send("Connected", OpCode::TEXT);
-        int x=0;
+        logger.info("Websocket client connected");
     };
 
     // Handle commands
@@ -77,6 +77,7 @@ void start_sock_server(){
     };
     b.close = [](auto *ws, int code, std::string_view message) {
         ws->send("Disconnected from server", OpCode::TEXT);
+        logger.info("Websocket client disconnected: ", message);
     };
 
     // Create websocket

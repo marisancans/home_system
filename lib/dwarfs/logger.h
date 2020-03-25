@@ -48,7 +48,7 @@ struct Logger {
     }
 
     template <typename ...Args>
-    str format_t(str fmt, str log_level, Args... args){
+    void format_t(str fmt, str log_level, Args... args){
         size_t size = snprintf( nullptr, 0, fmt.c_str(), args ... ) + 1; // Extra space for '\0'
         if( size <= 0 ){ throw std::runtime_error( "Error during formatting." ); }
         std::unique_ptr<char[]> buf( new char[ size ] );
@@ -56,7 +56,7 @@ struct Logger {
         auto formatted = std::string( buf.get(), buf.get() + size - 1 ); // We don't want the '\0' inside
 
         formatted = prefix_level(formatted, log_level);
-        return formatted;
+        exec_handlers(formatted);
     }
 
     void exec_handlers(str fmt);
